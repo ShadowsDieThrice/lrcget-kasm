@@ -1,0 +1,7 @@
+services:
+  lrcget:
+    image: shadowsdiethrice/lrcget-kasm:0.9.2
+    container_name: lrcget-container
+    ports:
+      - "3000:3000"  # Expose port 3000 if your application runs on this port
+    restart: unless-stopped
