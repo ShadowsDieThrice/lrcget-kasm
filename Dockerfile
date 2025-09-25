@@ -14,7 +14,7 @@ RUN echo "deb http://deb.debian.org/debian testing main" >> /etc/apt/sources.lis
     && echo 'Package: *\nPin: release a=testing\nPin-Priority: 90' > /etc/apt/preferences.d/testing \
     && echo 'Package: libc6\nPin: release a=unstable\nPin-Priority: 1001' >> /etc/apt/preferences.d/unstable
 
-# Install the desired version of glibc
+# Install newer version of glibc
 RUN apt-get update && apt-get install -y libc6 \
     && rm -rf /var/lib/apt/lists/* \
     && rm /etc/apt/sources.list.d/testing.list \
