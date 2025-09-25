@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y libc6 \
     && rm /etc/apt/preferences.d/unstable
 
 # Download and install the LRCget .deb package
-RUN wget https://github.com/tranxuanthang/lrcget/releases/download/0.9.2/lrcget_0.9.2_amd64.deb -O /tmp/lrcget.deb \
+RUN wget https://github.com/tranxuanthang/lrcget/releases/download/1.0.0/lrcget_1.0.0_amd64.deb -O /tmp/lrcget.deb \
     && gdebi -n /tmp/lrcget.deb \
     && rm /tmp/lrcget.deb
 
