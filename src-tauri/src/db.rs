@@ -10,7 +10,7 @@ use rusqlite::{named_params, params, Connection};
 use std::fs;
 use tauri::{AppHandle, Manager};
 
-const CURRENT_DB_VERSION: u32 = 6;
+const CURRENT_DB_VERSION: u32 = 7;
 
 /// Initializes the database connection, creating the .sqlite file if needed, and upgrading the database
 /// if it's out of date.
@@ -44,7 +44,7 @@ pub fn upgrade_database_if_needed(
 
     if existing_version < CURRENT_DB_VERSION {
         if existing_version <= 0 {
-            println!("Mirgate database version 1...");
+            println!("Migrate database version 1...");
             db.pragma_update(None, "journal_mode", "WAL")?;
 
             let tx = db.transaction()?;
@@ -102,7 +102,7 @@ pub fn upgrade_database_if_needed(
         }
 
         if existing_version <= 1 {
-            println!("Mirgate database version 2...");
+            println!("Migrate database version 2...");
             db.pragma_update(None, "journal_mode", "WAL")?;
 
             let tx = db.transaction()?;
@@ -119,7 +119,7 @@ pub fn upgrade_database_if_needed(
         }
 
         if existing_version <= 2 {
-            println!("Mirgate database version 3...");
+            println!("Migrate database version 3...");
             let tx = db.transaction()?;
 
             tx.pragma_update(None, "user_version", 3)?;
@@ -131,7 +131,7 @@ pub fn upgrade_database_if_needed(
         }
 
         if existing_version <= 3 {
-            println!("Mirgate database version 4...");
+            println!("Migrate database version 4...");
             let tx = db.transaction()?;
 
             tx.pragma_update(None, "user_version", 4)?;
@@ -149,7 +149,7 @@ pub fn upgrade_database_if_needed(
         }
 
         if existing_version <= 4 {
-            println!("Mirgate database version 5...");
+            println!("Migrate database version 5...");
             let tx = db.transaction()?;
 
             tx.pragma_update(None, "user_version", 5)?;
@@ -173,7 +173,7 @@ pub fn upgrade_database_if_needed(
         }
 
         if existing_version <= 5 {
-            println!("Mirgate database version 6...");
+            println!("Migrate database version 6...");
             let tx = db.transaction()?;
 
             tx.pragma_update(None, "user_version", 6)?;
@@ -183,6 +183,19 @@ pub fn upgrade_database_if_needed(
             ALTER TABLE config_data ADD skip_tracks_with_plain_lyrics BOOLEAN DEFAULT 0;
             UPDATE config_data SET skip_tracks_with_synced_lyrics = skip_not_needed_tracks;
             ALTER TABLE config_data DROP COLUMN skip_not_needed_tracks;
+            "})?;
+
+            tx.commit()?;
+        }
+
+        if existing_version <= 6 {
+            println!("Migrate database version 7...");
+            let tx = db.transaction()?;
+
+            tx.pragma_update(None, "user_version", 7)?;
+
+            tx.execute_batch(indoc! {"
+            ALTER TABLE config_data ADD show_line_count BOOLEAN DEFAULT 1;
             "})?;
 
             tx.commit()?;
@@ -232,6 +245,7 @@ pub fn get_config(db: &Connection) -> Result<PersistentConfig> {
       SELECT
         skip_tracks_with_synced_lyrics,
         skip_tracks_with_plain_lyrics,
+        show_line_count,
         try_embed_lyrics,
         theme_mode,
         lrclib_instance
@@ -242,6 +256,7 @@ pub fn get_config(db: &Connection) -> Result<PersistentConfig> {
         Ok(PersistentConfig {
             skip_tracks_with_synced_lyrics: r.get("skip_tracks_with_synced_lyrics")?,
             skip_tracks_with_plain_lyrics: r.get("skip_tracks_with_plain_lyrics")?,
+            show_line_count: r.get("show_line_count")?,
             try_embed_lyrics: r.get("try_embed_lyrics")?,
             theme_mode: r.get("theme_mode")?,
             lrclib_instance: r.get("lrclib_instance")?,
@@ -253,6 +268,7 @@ pub fn get_config(db: &Connection) -> Result<PersistentConfig> {
 pub fn set_config(
     skip_tracks_with_synced_lyrics: bool,
     skip_tracks_with_plain_lyrics: bool,
+    show_line_count: bool,
     try_embed_lyrics: bool,
     theme_mode: &str,
     lrclib_instance: &str,
@@ -263,6 +279,7 @@ pub fn set_config(
       SET
         skip_tracks_with_synced_lyrics = ?,
         skip_tracks_with_plain_lyrics = ?,
+        show_line_count = ?,
         try_embed_lyrics = ?,
         theme_mode = ?,
         lrclib_instance = ?
@@ -271,6 +288,7 @@ pub fn set_config(
     statement.execute((
         skip_tracks_with_synced_lyrics,
         skip_tracks_with_plain_lyrics,
+        show_line_count,
         try_embed_lyrics,
         theme_mode,
         lrclib_instance,
@@ -511,18 +529,37 @@ pub fn get_tracks(db: &Connection) -> Result<Vec<PersistentTrack>> {
     Ok(tracks)
 }
 
-pub fn get_track_ids(without_plain_lyrics: bool, without_synced_lyrics: bool, db: &Connection) -> Result<Vec<i64>> {
+pub fn get_track_ids(
+    synced_lyrics: bool,
+    plain_lyrics: bool,
+    instrumental: bool,
+    no_lyrics: bool,
+    db: &Connection
+) -> Result<Vec<i64>> {
     let base_query = "SELECT id FROM tracks";
 
-    let lyrics_conditions: &str = match (without_plain_lyrics, without_synced_lyrics) {
-        (true, true) => " WHERE txt_lyrics IS NULL AND lrc_lyrics IS NULL AND instrumental = false",
-        (true, false) => " WHERE txt_lyrics IS NULL AND instrumental = false",
-        (false, true) => " WHERE lrc_lyrics IS NULL AND instrumental = false",
-        (false, false) => "",
+    let mut conditions = Vec::new();
+
+    if !synced_lyrics {
+        conditions.push("(lrc_lyrics IS NULL OR lrc_lyrics = '[au: instrumental]')");
+    }
+    if !plain_lyrics {
+        conditions.push("(txt_lyrics IS NULL OR lrc_lyrics IS NOT NULL)");
+    }
+    if !instrumental {
+        conditions.push("instrumental = false");
+    }
+    if !no_lyrics {
+        conditions.push("(txt_lyrics IS NOT NULL OR lrc_lyrics IS NOT NULL OR instrumental = true)");
+    }
+
+    let where_clause = if !conditions.is_empty() {
+        format!(" WHERE {}", conditions.join(" AND "))
+    } else {
+        String::new()
     };
 
-    let full_query = format!("{}{} ORDER BY title_lower ASC",
-        base_query, lyrics_conditions);
+    let full_query = format!("{}{} ORDER BY title_lower ASC", base_query, where_clause);
 
     let mut statement = db.prepare(&full_query)?;
     let mut rows = statement.query([])?;
@@ -535,19 +572,48 @@ pub fn get_track_ids(without_plain_lyrics: bool, without_synced_lyrics: bool, db
     Ok(track_ids)
 }
 
-pub fn get_search_track_ids(query_str: &String, db: &Connection) -> Result<Vec<i64>> {
-    let query = indoc! {"
+pub fn get_search_track_ids(
+    query_str: &String,
+    synced_lyrics: bool,
+    plain_lyrics: bool,
+    instrumental: bool,
+    no_lyrics: bool,
+    db: &Connection
+) -> Result<Vec<i64>> {
+    let base_query = indoc! {"
       SELECT tracks.id
       FROM tracks
       JOIN artists ON tracks.artist_id = artists.id
       JOIN albums ON tracks.album_id = albums.id
-      WHERE artists.name_lower LIKE ?
+      WHERE (artists.name_lower LIKE ?
       OR albums.name_lower LIKE ?
-      OR tracks.title_lower LIKE ?
-      ORDER BY title_lower ASC
-  "};
+      OR tracks.title_lower LIKE ?)
+    "};
 
-    let mut statement = db.prepare(query)?;
+    let mut conditions = Vec::new();
+
+    if !synced_lyrics {
+        conditions.push("(lrc_lyrics IS NULL OR lrc_lyrics = '[au: instrumental]')");
+    }
+    if !plain_lyrics {
+        conditions.push("(txt_lyrics IS NULL OR lrc_lyrics IS NOT NULL)");
+    }
+    if !instrumental {
+        conditions.push("instrumental = false");
+    }
+    if !no_lyrics {
+        conditions.push("(txt_lyrics IS NOT NULL OR lrc_lyrics IS NOT NULL OR instrumental = true)");
+    }
+
+    let where_clause = if !conditions.is_empty() {
+        format!(" AND {}", conditions.join(" AND "))
+    } else {
+        String::new()
+    };
+
+    let full_query = format!("{}{} ORDER BY title_lower ASC", base_query, where_clause);
+
+    let mut statement = db.prepare(&full_query)?;
     let formatted_query_str = format!("%{}%", prepare_input(query_str));
     let mut rows = statement.query(params![
         formatted_query_str,

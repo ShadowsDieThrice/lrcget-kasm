@@ -60,15 +60,19 @@
           <div v-if="searchResult && searchResult.length" class="flex flex-col gap-1 overflow-auto">
             <div v-for="item in searchResult" :key="item.id" class="rounded bg-brave-98 dark:bg-brave-10 hover:bg-brave-95 hover:dark:bg-brave-10 border border-transparent hover:dark:border-brave-30 transition px-2 py-1 flex gap-2">
               <div class="h-full overflow-hidden grow">
-                <div class="text-sm font-bold">
-                  <span class="mr-2 text-brave-30 dark:text-brave-95">{{ item.name }}</span>
+                <div class="font-bold flex gap-1">
+                  <span class="mr-1 text-sm text-brave-30 dark:text-brave-95">{{ item.name }}</span>
+                  <template v-if="showLineCount === true">
+                    <span v-if="item.syncedLyrics" class="text-blue-200 font-bold text-[0.65rem] bg-blue-800 rounded px-1 py-0.5">{{ countLines(item.syncedLyrics) }} Lines</span>
+                    <span v-else-if="item.plainLyrics" class="text-blue-200 font-bold text-[0.65rem] bg-blue-800 rounded px-1 py-0.5">{{ countLines(item.plainLyrics) }} Lines</span>
+                  </template>
                   <span v-if="item.syncedLyrics" class="text-green-200 font-bold text-[0.65rem] bg-green-800 rounded px-1 py-0.5">Synced</span>
                   <span v-else-if="item.plainLyrics" class="text-gray-200 font-bold text-[0.65rem] bg-gray-800 rounded px-1 py-0.5">Plain</span>
                   <span v-else-if="item.instrumental" class="text-gray-200 font-bold text-[0.65rem] bg-gray-500 rounded px-1 py-0.5">Instrumental</span>
-                  <span v-if="Math.round(item.duration) - Math.round(searchingTrack.duration) > 2" class="ml-1 text-blue-800 text-[0.75rem]">
+                  <span v-if="Math.round(item.duration) - Math.round(searchingTrack.duration) > 2" class="text-blue-800 text-[0.75rem]">
                     +{{ humanDuration(Math.abs(item.duration - Math.round(searchingTrack.duration))) }}
                   </span>
-                  <span v-else-if="Math.round(item.duration) - Math.round(searchingTrack.duration) < -2" class="ml-1 text-blue-800 text-[0.75rem]">
+                  <span v-else-if="Math.round(item.duration) - Math.round(searchingTrack.duration) < -2" class="text-blue-800 text-[0.75rem]">
                     -{{ humanDuration(Math.abs(item.duration - Math.round(searchingTrack.duration))) }}
                   </span>
                 </div>
@@ -111,6 +115,7 @@ const previewingTrack = ref(null)
 const title = ref('')
 const albumName = ref('')
 const artistName = ref('')
+const showLineCount = ref(true)
 
 const { open: openPreviewModal, close: closePreviewModal } = useModal({
   component: Preview,
@@ -126,6 +131,10 @@ const { open: openPreviewModal, close: closePreviewModal } = useModal({
     }
   },
 })
+
+const countLines = (lines) => {
+  return (lines.match(/\n/g) || []).length + 1
+}
 
 const humanDuration = (seconds) => {
   return new Date(seconds * 1000).toISOString().slice(14, 19)
@@ -164,12 +173,14 @@ const initialize = async () => {
     return
   }
 
+  const config = await invoke('get_config')
   searchResult.value = null
   loading.value = true
 
   title.value = props.searchingTrack.title
   albumName.value = props.searchingTrack.album_name
   artistName.value = props.searchingTrack.artist_name
+  showLineCount.value = config.show_line_count
 }
 
 onMounted(async () => {
