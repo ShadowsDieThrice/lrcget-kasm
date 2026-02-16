@@ -1,6 +1,6 @@
 services:
   lrcget:
-    image: shadowsdiethrice/lrcget-kasm:1.0.0
+    image: shadowsdiethrice/lrcget-kasm:1.0.2
     container_name: lrcget-container
     ports:
       - "3000:3000"
