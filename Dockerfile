@@ -14,7 +14,7 @@ RUN echo "deb http://deb.debian.org/debian testing main" >> /etc/apt/sources.lis
     && echo 'Package: *\nPin: release a=testing\nPin-Priority: 90' > /etc/apt/preferences.d/testing \
     && echo 'Package: libc6\nPin: release a=unstable\nPin-Priority: 1001' >> /etc/apt/preferences.d/unstable
 
-# Install newer version of glibc
+# Install the desired version of glibc
 RUN apt-get update && apt-get install -y libc6 \
     && rm -rf /var/lib/apt/lists/* \
     && rm /etc/apt/sources.list.d/testing.list \
@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y libc6 \
     && rm /etc/apt/preferences.d/unstable
 
 # Download and install the LRCget .deb package
-RUN wget https://github.com/tranxuanthang/lrcget/releases/download/1.0.0/lrcget_1.0.0_amd64.deb -O /tmp/lrcget.deb \
+RUN wget https://github.com/tranxuanthang/lrcget/releases/download/2.0.1/lrcget_2.0.1_amd64.deb -O /tmp/lrcget.deb \
     && gdebi -n /tmp/lrcget.deb \
     && rm /tmp/lrcget.deb
 
